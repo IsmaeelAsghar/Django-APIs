@@ -15,7 +15,7 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path
 from api.views import item_view
 from django.http import HttpResponse
 
@@ -26,11 +26,8 @@ def home_view(request):
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', home_view),
-    path('items/', item_view),
-    
-    path('items/', include('api.urls')),
-    
-    
+    path('items/', item_view), # for GET all and POST
+    path('items/<int:item_id>/', item_view),
     
 ]
 

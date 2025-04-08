@@ -1,76 +1,87 @@
-# from django.shortcuts import render
-
-
-# from django.http import JsonResponse
-# from django.views.decorators.csrf import csrf_exempt
-# from django.db import models
-# import json
-
-# # View function to handle GET and POST requests
-# @csrf_exempt
-# def item_view(request):
-#     if request.method == 'GET':
-#         items = item.objects.all()  # Fetch all items from the database
-#         data = [{"id": item.id, "name": item.name} for item in items]
-#         return JsonResponse(data, safe=False)
-
-#     elif request.method == 'POST':
-#         body = json.loads(request.body)  # Parse JSON request body
-#         item = item.objects.create(name=body['name'])  # Create the item in DB
-#         return JsonResponse({"id": item.id, "name": item.name})
-
-
-
-
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from .models import Item  # Import the Item model
+from .models import Item, Category
 import json
 
-# View function to handle GET, POST, PUT, DELETE requests
-@csrf_exempt  # Disable CSRF protection (use with caution)
+@csrf_exempt
 def item_view(request, item_id=None):
-    # GET request to fetch all items
     if request.method == 'GET':
         if item_id:
             try:
-                item = Item.objects.get(id=item_id)  # Fetch item by ID
-                return JsonResponse({"id": item.id, "name": item.name})
+                item = Item.objects.get(id=item_id)
+                return JsonResponse({
+                    "id": item.id,
+                    "name": item.name,
+                    "price": float(item.price),
+                    "category": item.category.name if item.category else None,
+                    "created_at": item.created_at
+                })
             except Item.DoesNotExist:
                 return JsonResponse({"error": "Item not found"}, status=404)
-        
-        items = Item.objects.all()  # Fetch all items
-        data = [{"id": item.id, "name": item.name} for item in items]
+
+        items = Item.objects.all()
+        data = [{
+            "id": item.id,
+            "name": item.name,
+            "price": float(item.price),
+            "category": item.category.name if item.category else None,
+            "created_at": item.created_at
+        } for item in items]
         return JsonResponse(data, safe=False)
 
-    # POST request to create a new item
     elif request.method == 'POST':
-        body = json.loads(request.body)  # Parse JSON request body
-        item = Item.objects.create(name=body['name'])  # Create the item in DB
-        return JsonResponse({"id": item.id, "name": item.name}, status=201)
+        try:
+            body = json.loads(request.body)
+            category = Category.objects.get(id=body['category_id']) if 'category_id' in body else None
+            item = Item.objects.create(
+                name=body['name'],
+                price=body['price'],
+                category=category
+            )
+            return JsonResponse({
+                "id": item.id,
+                "name": item.name,
+                "price": float(item.price),
+                "category": item.category.name if item.category else None
+            }, status=201)
+        except Category.DoesNotExist:
+            return JsonResponse({"error": "Invalid category ID"}, status=400)
+        except KeyError as e:
+            return JsonResponse({"error": f"Missing field: {e}"}, status=400)
 
-    # PUT request to update an existing item
     elif request.method == 'PUT':
-        if item_id:
-            try:
-                item = Item.objects.get(id=item_id)  # Fetch the item by ID
-                body = json.loads(request.body)  # Parse JSON request body
-                item.name = body['name']  # Update item name
-                item.save()  # Save updated item to the DB
-                return JsonResponse({"id": item.id, "name": item.name})
-            except Item.DoesNotExist:
-                return JsonResponse({"error": "Item not found"}, status=404)
-        
-        return JsonResponse({"error": "Item ID is required for update"}, status=400)
+        if not item_id:
+            return JsonResponse({"error": "Item ID is required for update"}, status=400)
 
-    # DELETE request to delete an item
+        try:
+            item = Item.objects.get(id=item_id)
+            body = json.loads(request.body)
+            item.name = body.get('name', item.name)
+            item.price = body.get('price', item.price)
+
+            if 'category_id' in body:
+                try:
+                    item.category = Category.objects.get(id=body['category_id'])
+                except Category.DoesNotExist:
+                    return JsonResponse({"error": "Invalid category ID"}, status=400)
+
+            item.save()
+            return JsonResponse({
+                "id": item.id,
+                "name": item.name,
+                "price": float(item.price),
+                "category": item.category.name if item.category else None
+            })
+        except Item.DoesNotExist:
+            return JsonResponse({"error": "Item not found"}, status=404)
+
     elif request.method == 'DELETE':
-        if item_id:
-            try:
-                item = Item.objects.get(id=item_id)  # Fetch the item by ID
-                item.delete()  # Delete the item from the DB
-                return JsonResponse({"message": "Item deleted successfully"})
-            except Item.DoesNotExist:
-                return JsonResponse({"error": "Item not found"}, status=404)
-        
-        return JsonResponse({"error": "Item ID is required for deletion"}, status=400)
+        if not item_id:
+            return JsonResponse({"error": "Item ID is required for deletion"}, status=400)
+
+        try:
+            item = Item.objects.get(id=item_id)
+            item.delete()
+            return JsonResponse({"message": "Item deleted successfully"})
+        except Item.DoesNotExist:
+            return JsonResponse({"error": "Item not found"}, status=404)
